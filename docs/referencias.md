@@ -1,4 +1,7 @@
-The journey, the experience and the system
+# The journey, the experience and the system
+
+> **Note:** You can explore the "System" approach using our online tool: [FoxLab Map System](https://foxlab-mapsystem.netlify.app/) (Demo Mode).
+
 Our tools shape how we see the world. And so we need to shape the tools before they shape us.
 
 
@@ -67,11 +70,13 @@ E.g. If we are a TV-cable provider and our customers need is “entertainment”
 Then map those inputs as nodes surrounding the need at the center.
 
 A simple causal diagram indicating what leads to more or less of the core need
+
 ![Illustration by the author](https://miro.medium.com/v2/resize:fit:640/format:webp/1*zUQQ4UD76N6EURt3ELp_rw.png)
 
 Now ask again: what leads to more or less of the nodes you just added to the model, and also, are any of them connecting and influencing each other?
 
 A causal diagram showing what leads to more or less of the customer need
+
 ![Illustration by the author](https://miro.medium.com/v2/resize:fit:640/format:webp/1*IPrubzrdSGT-avXdQ42w9Q.png)
 
 Continue doing this until you are happy with the output.
