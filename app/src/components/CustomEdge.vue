@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, useVueFlow } from '@vue-flow/core'
 import { computed } from 'vue'
+import { useDiagramState } from '../stores/diagramStore'
 
 const props = defineProps<{
   id: string
@@ -17,7 +18,8 @@ const props = defineProps<{
   markerEnd?: string
 }>()
 
-const { findEdge, addEdges, removeEdges } = useVueFlow()
+const { findEdge } = useVueFlow()
+const { recalculateWeights } = useDiagramState()
 
 const path = computed(() => getBezierPath(props))
 
@@ -25,10 +27,10 @@ const toggleSign = (evt: Event) => {
   evt.stopPropagation()
   const edge = findEdge(props.id)
   if (edge) {
-    // We can't directly mutate, so we remove and re-add or update data if supported
-    // VueFlow objects are reactive, so we can try mutating data directly if it's a ref
-    // But safe way is to update the edge
+    // Update edge sign
     edge.data = { ...edge.data, sign: edge.data?.sign === '+' ? '-' : '+' }
+    // Recalculate weights after changing polarity
+    setTimeout(() => recalculateWeights(), 50)
   }
 }
 

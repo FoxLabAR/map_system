@@ -81,7 +81,8 @@ export function useDiagramState() {
                     }
                 })
 
-                node.data.totalWeight = (node.data.weight || 0) + inherited
+                // Use immutable update to ensure Vue reactivity
+                node.data = { ...node.data, totalWeight: (node.data.weight || 0) + inherited }
             })
         }
     }
@@ -194,6 +195,7 @@ export function useDiagramState() {
         loadFromStorage,
         saveToStorage,
         recalculateTree,
+        recalculateWeights,  // Export this so component can trigger it
         addNode,
         colors
     }

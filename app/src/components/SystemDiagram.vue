@@ -22,6 +22,7 @@ const {
   searchQuery, 
   loadFromStorage, 
   recalculateTree, 
+  recalculateWeights,
   addNode: storeAddNode, 
   colors
 } = useDiagramState()
@@ -30,7 +31,6 @@ const {
 const selectedNode = ref<any>(null)
 const isDeleteMode = ref(false)
 const editingLabelId = ref<string | null>(null)
-const editingWeightId = ref<string | null>(null)
 const openColorPickerId = ref<string | null>(null)
 const pickerPosition = ref({ x: 0, y: 0 })
 
@@ -53,28 +53,7 @@ const stopEditingLabel = () => {
   editingLabelId.value = null
 }
 
-// Weight editing
-const startEditingWeight = (nodeId: string) => {
-  editingWeightId.value = nodeId
-}
 
-const stopEditingWeight = () => {
-  editingWeightId.value = null
-}
-
-const updateNodeWeight = (node: any, newTotal: number) => {
-  const inputEdges = edges.value.filter(e => e.target === node.id)
-  let inherited = 0
-  inputEdges.forEach(e => {
-    const sourceNode = nodes.value.find(n => n.id === e.source)
-    if (sourceNode) {
-      const signVal = e.data?.sign === '-' ? -1 : 1
-      inherited += (sourceNode.data.totalWeight || 0) + signVal
-    }
-  })
-  
-  node.data.weight = newTotal - inherited
-}
 
 // Color picker
 const toggleColorPicker = (nodeId: string, event: MouseEvent) => {
@@ -170,6 +149,8 @@ const onNodeClick = (event: any) => {
       selectedNode.value = null
       sidebarOpen.value = false
     }
+    // Recalculate weights after removing a node (affects connected nodes)
+    setTimeout(recalculateWeights, 50)
     return
   }
 
@@ -180,6 +161,8 @@ const onNodeClick = (event: any) => {
 const onEdgeClick = (event: any) => {
   if (isDeleteMode.value) {
     removeEdges([event.edge.id])
+    // Recalculate weights after removing an edge (changes connections)
+    setTimeout(recalculateWeights, 50)
   }
 }
 </script>
@@ -242,12 +225,8 @@ const onEdgeClick = (event: any) => {
                   @keyup.enter="stopEditingLabel" class="inline-input" v-focus />
                 <span v-else @click="startEditingLabel(node.id)" title="Click to edit">{{ node.data.label }}</span>
               </td>
-              <td class="col-weight" @click.stop>
-                <input v-if="editingWeightId === node.id" :value="node.data.totalWeight || 0"
-                  @input="(e) => updateNodeWeight(node, Number((e.target as HTMLInputElement).value))" type="number"
-                  @blur="stopEditingWeight" @keyup.enter="stopEditingWeight" class="inline-input weight-input"
-                  v-focus />
-                <span v-else @click="startEditingWeight(node.id)">{{ node.data.totalWeight || 0 }}</span>
+              <td class="col-weight">
+                <span>{{ node.data.totalWeight || 0 }}</span>
               </td>
             </tr>
           </tbody>
