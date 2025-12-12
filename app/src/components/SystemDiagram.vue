@@ -34,6 +34,7 @@ const isDeleteMode = ref(false)
 const editingLabelId = ref<string | null>(null)
 const openColorPickerId = ref<string | null>(null)
 const pickerPosition = ref({ x: 0, y: 0 })
+const showClearModal = ref(false)
 
 // Filtered nodes for search
 const filteredNodes = computed(() => {
@@ -124,9 +125,16 @@ onUnmounted(() => {
 
 // Clear diagram with confirmation
 const handleClear = () => {
-  if (confirm('¿Estás seguro de que quieres limpiar el diagrama? Esta acción no se puede deshacer.')) {
-    clearDiagram()
-  }
+  showClearModal.value = true
+}
+
+const confirmClear = () => {
+  clearDiagram()
+  showClearModal.value = false
+}
+
+const cancelClear = () => {
+  showClearModal.value = false
 }
 
 // Export functions
@@ -230,10 +238,10 @@ const onEdgeClick = (event: any) => {
   <div class="diagram-container" :class="{ 'delete-mode': isDeleteMode }">
     <div class="toolbar glass">
       <button @click="sidebarOpen = !sidebarOpen" class="btn-secondary">
-        {{ sidebarOpen ? 'Hide List' : 'Show List' }}
+        {{ sidebarOpen ? 'Ocultar Lista' : 'Mostrar Lista' }}
       </button>
-      <button @click="storeAddNode('input')" class="btn-secondary">Add Input</button>
-      <div v-if="isDeleteMode" class="mode-indicator">DELETE MODE</div>
+      <button @click="storeAddNode('input')" class="btn-secondary">Agregar Nodo</button>
+      <div v-if="isDeleteMode" class="mode-indicator">MODO BORRAR</div>
     </div>
 
     <div class="main-area">
@@ -254,7 +262,7 @@ const onEdgeClick = (event: any) => {
 
     <div class="sidebar glass" :class="{ open: sidebarOpen }">
       <div class="sidebar-header">
-        <h3>All Nodes</h3>
+        <h3>Todos los Nodos</h3>
         <div class="export-buttons">
           <button @click="exportCSV" class="btn-export" title="Exportar como CSV">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -276,7 +284,7 @@ const onEdgeClick = (event: any) => {
       </div>
 
       <div class="sidebar-search">
-        <input v-model="searchQuery" type="text" placeholder="Search nodes..." class="search-input" />
+        <input v-model="searchQuery" type="text" placeholder="Buscar nodos..." class="search-input" />
       </div>
 
       <div class="node-list">
@@ -284,8 +292,8 @@ const onEdgeClick = (event: any) => {
           <thead>
             <tr>
               <th width="10%">Color</th>
-              <th width="15%">Code</th>
-              <th width="55%">Label</th>
+              <th width="15%">Código</th>
+              <th width="55%">Etiqueta</th>
               <th width="20%">Peso</th>
             </tr>
           </thead>
@@ -299,7 +307,7 @@ const onEdgeClick = (event: any) => {
               <td class="col-label" @click.stop>
                 <input v-if="editingLabelId === node.id" v-model="node.data.label" @blur="stopEditingLabel"
                   @keyup.enter="stopEditingLabel" class="inline-input" v-focus />
-                <span v-else @click="startEditingLabel(node.id)" title="Click to edit">{{ node.data.label }}</span>
+                <span v-else @click="startEditingLabel(node.id)" title="Click para editar">{{ node.data.label }}</span>
               </td>
               <td class="col-weight">
                 <span>{{ node.data.totalWeight || 0 }}</span>
@@ -315,6 +323,21 @@ const onEdgeClick = (event: any) => {
       <div v-if="openColorPickerId" class="color-popover"
         :style="{ top: pickerPosition.y + 'px', left: pickerPosition.x + 'px' }">
         <div v-for="c in colors" :key="c" class="color-option" :style="{ backgroundColor: c }" @click="selectColor(c)">
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Confirmation Modal -->
+    <Teleport to="body">
+      <div v-if="showClearModal" class="modal-overlay" @click="cancelClear">
+        <div class="modal-content glass" @click.stop>
+          <h2>Confirmar Limpieza</h2>
+          <p>¿Estás seguro de que quieres limpiar el diagrama?</p>
+          <p class="modal-warning">Esta acción no se puede deshacer.</p>
+          <div class="modal-actions">
+            <button @click="cancelClear" class="btn-secondary">Cancelar</button>
+            <button @click="confirmClear" class="btn-danger">Limpiar</button>
+          </div>
         </div>
       </div>
     </Teleport>
@@ -604,5 +627,81 @@ const onEdgeClick = (event: any) => {
 
 .floating-clear-btn svg {
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-content {
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-content h2 {
+  margin: 0 0 1rem 0;
+  color: var(--text-color);
+  font-size: 1.5rem;
+}
+
+.modal-content p {
+  margin: 0.5rem 0;
+  color: var(--text-color);
+  line-height: 1.5;
+}
+
+.modal-warning {
+  color: #ef4444;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  justify-content: flex-end;
+}
+
+.modal-actions .btn-secondary,
+.modal-actions .btn-danger {
+  min-width: 100px;
 }
 </style>
