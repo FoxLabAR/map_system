@@ -23,7 +23,8 @@ const {
   loadFromStorage, 
   recalculateTree, 
   recalculateWeights,
-  addNode: storeAddNode, 
+  addNode: storeAddNode,
+  clearDiagram,
   colors
 } = useDiagramState()
 
@@ -121,6 +122,64 @@ onUnmounted(() => {
   window.removeEventListener('keyup', handleKeyUp)
 })
 
+// Clear diagram with confirmation
+const handleClear = () => {
+  if (confirm('¿Estás seguro de que quieres limpiar el diagrama? Esta acción no se puede deshacer.')) {
+    clearDiagram()
+  }
+}
+
+// Export functions
+const exportCSV = () => {
+  // Create CSV header
+  let csv = 'Code,Label,Peso\n'
+  
+  // Add data rows
+  filteredNodes.value.forEach(node => {
+    const code = node.data.code || '-'
+    const label = node.data.label || ''
+    const weight = node.data.totalWeight || 0
+    // Escape commas and quotes in label
+    const escapedLabel = `"${label.replace(/"/g, '""')}"`
+    csv += `${code},${escapedLabel},${weight}\n`
+  })
+  
+  // Create download
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  const url = URL.createObjectURL(blob)
+  link.setAttribute('href', url)
+  link.setAttribute('download', `diagram_${new Date().toISOString().split('T')[0]}.csv`)
+  link.style.visibility = 'hidden'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
+const exportJSON = () => {
+  // Create JSON data
+  const data = filteredNodes.value.map(node => ({
+    code: node.data.code || '-',
+    label: node.data.label || '',
+    weight: node.data.totalWeight || 0,
+    level: node.data.level || 0,
+    color: node.data.color || '#64748b'
+  }))
+  
+  const jsonStr = JSON.stringify(data, null, 2)
+  
+  // Create download
+  const blob = new Blob([jsonStr], { type: 'application/json' })
+  const link = document.createElement('a')
+  const url = URL.createObjectURL(blob)
+  link.setAttribute('href', url)
+  link.setAttribute('download', `diagram_${new Date().toISOString().split('T')[0]}.json`)
+  link.style.visibility = 'hidden'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
 // Connect handler
 const onConnect = (params: any) => {
   const edgeColor = '#64748b'
@@ -173,7 +232,6 @@ const onEdgeClick = (event: any) => {
       <button @click="sidebarOpen = !sidebarOpen" class="btn-secondary">
         {{ sidebarOpen ? 'Hide List' : 'Show List' }}
       </button>
-      <button @click="storeAddNode('central')" class="btn-primary">Add Goal</button>
       <button @click="storeAddNode('input')" class="btn-secondary">Add Input</button>
       <div v-if="isDeleteMode" class="mode-indicator">DELETE MODE</div>
     </div>
@@ -197,6 +255,24 @@ const onEdgeClick = (event: any) => {
     <div class="sidebar glass" :class="{ open: sidebarOpen }">
       <div class="sidebar-header">
         <h3>All Nodes</h3>
+        <div class="export-buttons">
+          <button @click="exportCSV" class="btn-export" title="Exportar como CSV">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            CSV
+          </button>
+          <button @click="exportJSON" class="btn-export" title="Exportar como JSON">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            JSON
+          </button>
+        </div>
       </div>
 
       <div class="sidebar-search">
@@ -242,6 +318,16 @@ const onEdgeClick = (event: any) => {
         </div>
       </div>
     </Teleport>
+
+    <!-- Floating Clear Button -->
+    <button @click="handleClear" class="floating-clear-btn" title="Limpiar diagrama">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="3 6 5 6 21 6"></polyline>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        <line x1="10" y1="11" x2="10" y2="17"></line>
+        <line x1="14" y1="11" x2="14" y2="17"></line>
+      </svg>
+    </button>
   </div>
 </template>
 
@@ -322,6 +408,36 @@ const onEdgeClick = (event: any) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+}
+
+.export-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-export {
+  background: transparent;
+  border: 1px solid var(--primary-color);
+  color: var(--primary-color);
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s;
+}
+
+.btn-export:hover {
+  background: rgba(59, 130, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+.btn-export svg {
+  width: 14px;
+  height: 14px;
 }
 
 .close-btn {
@@ -456,5 +572,37 @@ const onEdgeClick = (event: any) => {
 
 .color-option:hover {
   transform: scale(1.1);
+}
+
+.floating-clear-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 100;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+  transition: all 0.3s ease;
+}
+
+.floating-clear-btn:hover {
+  transform: scale(1.1) translateY(-2px);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.5);
+}
+
+.floating-clear-btn:active {
+  transform: scale(0.95);
+}
+
+.floating-clear-btn svg {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
 }
 </style>

@@ -182,6 +182,21 @@ export function useDiagramState() {
         ]
     }
 
+    const clearDiagram = () => {
+        // Reset to default state (only GOAL node)
+        nodes.value = [
+            {
+                id: 'goal',
+                type: 'custom',
+                position: { x: 400, y: 300 },
+                data: { label: 'GOAL', type: 'central', shape: 'round', code: 'GOAL', level: 0, color: '#000000', weight: 0, totalWeight: 0 },
+            }
+        ]
+        edges.value = []
+        // Clear localStorage
+        localStorage.removeItem(STORAGE_KEY)
+    }
+
     // Watch for changes to persist
     watch([nodes, edges], () => {
         saveToStorage()
@@ -197,6 +212,7 @@ export function useDiagramState() {
         recalculateTree,
         recalculateWeights,  // Export this so component can trigger it
         addNode,
+        clearDiagram,
         colors
     }
 }
