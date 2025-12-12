@@ -1,126 +1,50 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { VueFlow, useVueFlow, MarkerType } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
-import { MiniMap } from '@vue-flow/minimap'
 import CustomNode from './CustomNode.vue'
 import CustomEdge from './CustomEdge.vue'
+import { useDiagramState } from '../stores/diagramStore'
 
 // Import styles
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
-import '@vue-flow/minimap/dist/style.css'
 
-const { addNodes, onConnect, addEdges, findNode, getEdges, getNodes, removeNodes, removeEdges, toObject, setViewport } = useVueFlow()
+const { findNode, removeNodes, removeEdges } = useVueFlow()
 
-const STORAGE_KEY = 'system-diagram-data'
+// Use the singleton store
+const { 
+  nodes, 
+  edges, 
+  sidebarOpen, 
+  searchQuery, 
+  loadFromStorage, 
+  recalculateTree, 
+  addNode: storeAddNode, 
+  colors
+} = useDiagramState()
 
-const nodes = ref([
-  {
-    id: 'goal',
-    type: 'custom',
-    position: { x: 400, y: 300 },
-    data: { label: 'GOAL', type: 'central', shape: 'round', code: 'GOAL', level: 0, color: '#000000', weight: 0, totalWeight: 0 },
-  },
-])
-
-const edges = ref([])
-
-// Sidebar state
+// Local UI state
 const selectedNode = ref<any>(null)
-const sidebarOpen = ref(false)
 const isDeleteMode = ref(false)
-const searchQuery = ref('')
-
-const colors = ['#ef4444', '#f59e0b', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899']
-
-const filteredNodes = computed(() => {
-  if (!searchQuery.value) return nodes.value
-  const query = searchQuery.value.toLowerCase()
-  return nodes.value.filter(n =>
-    n.data.label.toLowerCase().includes(query) ||
-    (n.data.code && n.data.code.toLowerCase().includes(query))
-  )
-})
-
-// Persistence Logic
-const saveToStorage = () => {
-  const data = toObject()
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-  // console.log('Saved to localStorage', data)
-}
-
-const loadFromStorage = () => {
-  const saved = localStorage.getItem(STORAGE_KEY)
-  if (saved) {
-    try {
-      const data = JSON.parse(saved)
-      if (data.nodes) {
-        nodes.value = data.nodes
-        edges.value = data.edges || []
-        if (data.viewport) {
-          setViewport(data.viewport)
-        }
-        // Recalculate tree after loading to ensure consistency
-        setTimeout(recalculateTree, 100)
-      }
-    } catch (e) {
-      console.error('Failed to load diagram data', e)
-    }
-  }
-}
-
-const recalculateWeights = () => {
-  // Group nodes by level
-  const levels = new Map<number, any[]>()
-  let maxLevel = 0
-
-  nodes.value.forEach(node => {
-    const level = node.data.level || 0
-    if (!levels.has(level)) levels.set(level, [])
-    levels.get(level)!.push(node)
-    if (level > maxLevel) maxLevel = level
-  })
-
-  // Iterate from max level down to 0 (Leaves -> Root)
-  for (let i = maxLevel; i >= 0; i--) {
-    const levelNodes = levels.get(i) || []
-
-    levelNodes.forEach(node => {
-      // Find inputs (children in tree terms, but sources in graph terms)
-      // Edges: Source -> Target. 
-      // If 'node' is the target, then 'source' is the input.
-      const inputEdges = edges.value.filter(e => e.target === node.id)
-
-      let inherited = 0
-      inputEdges.forEach(e => {
-        const sourceNode = nodes.value.find(n => n.id === e.source)
-        if (sourceNode) {
-          const signVal = e.data?.sign === '-' ? -1 : 1
-          inherited += (sourceNode.data.totalWeight || 0) + signVal
-        }
-      })
-
-      // Calculate total weight
-      // If it's a leaf (no inputs), inherited is 0.
-      node.data.totalWeight = (node.data.weight || 0) + inherited
-    })
-  }
-}
-
-// Watch for changes to save and recalculate
-watch([nodes, edges], () => {
-  recalculateWeights()
-  saveToStorage()
-}, { deep: true })
-
 const editingLabelId = ref<string | null>(null)
 const editingWeightId = ref<string | null>(null)
 const openColorPickerId = ref<string | null>(null)
 const pickerPosition = ref({ x: 0, y: 0 })
 
+// Filtered nodes for search
+const filteredNodes = computed(() => {
+  if (!searchQuery.value) return nodes.value
+  const query = searchQuery.value.toLowerCase()
+  return nodes.value.filter(n => 
+    n.data.label.toLowerCase().includes(query) || 
+    (n.data.code && n.data.code.toLowerCase().includes(query))
+  )
+})
+
+// Label editing
 const startEditingLabel = (nodeId: string) => {
   editingLabelId.value = nodeId
 }
@@ -129,6 +53,7 @@ const stopEditingLabel = () => {
   editingLabelId.value = null
 }
 
+// Weight editing
 const startEditingWeight = (nodeId: string) => {
   editingWeightId.value = nodeId
 }
@@ -138,11 +63,6 @@ const stopEditingWeight = () => {
 }
 
 const updateNodeWeight = (node: any, newTotal: number) => {
-  // Calculate what the base weight should be to achieve the new total
-  // total = base + inherited
-  // base = total - inherited
-
-  // We need to re-calculate inherited for this node
   const inputEdges = edges.value.filter(e => e.target === node.id)
   let inherited = 0
   inputEdges.forEach(e => {
@@ -152,21 +72,16 @@ const updateNodeWeight = (node: any, newTotal: number) => {
       inherited += (sourceNode.data.totalWeight || 0) + signVal
     }
   })
-
+  
   node.data.weight = newTotal - inherited
-  // Recalculation will happen via watcher
 }
 
-const vFocus = {
-  mounted: (el: HTMLElement) => el.focus()
-}
-
+// Color picker
 const toggleColorPicker = (nodeId: string, event: MouseEvent) => {
   if (openColorPickerId.value === nodeId) {
     openColorPickerId.value = null
   } else {
     openColorPickerId.value = nodeId
-    // Calculate position
     const target = event.target as HTMLElement
     const rect = target.getBoundingClientRect()
     pickerPosition.value = {
@@ -185,12 +100,16 @@ const selectColor = (color: string) => {
   openColorPickerId.value = null
 }
 
-// Close color picker when clicking outside
 const closeColorPicker = () => {
   openColorPickerId.value = null
 }
 
-// Key listeners for Delete Mode
+// v-focus directive
+const vFocus = {
+  mounted: (el: HTMLElement) => el.focus()
+}
+
+// Delete mode handlers
 const handleKeyDown = (e: KeyboardEvent) => {
   if (e.key === 'Control' || e.key === 'Meta') {
     isDeleteMode.value = true
@@ -203,12 +122,15 @@ const handleKeyUp = (e: KeyboardEvent) => {
   }
 }
 
+// Lifecycle hooks
 onMounted(() => {
-  loadFromStorage()
+  // Use nextTick to ensure VueFlow is fully mounted before loading
+  nextTick(() => {
+    loadFromStorage()
+  })
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('keyup', handleKeyUp)
   window.addEventListener('click', (e: any) => {
-    // Close if clicking outside the picker and not on a color preview button
     if (!e.target.closest('.color-popover') && !e.target.closest('.color-preview')) {
       closeColorPicker()
     }
@@ -220,144 +142,30 @@ onUnmounted(() => {
   window.removeEventListener('keyup', handleKeyUp)
 })
 
-const recalculateTree = () => {
-  const goalNode = nodes.value.find(n => n.data.type === 'central')
-  if (!goalNode) return
+// Connect handler
+const onConnect = (params: any) => {
+  const edgeColor = '#64748b'
 
-  // Use getEdges() to get the most up-to-date edges from VueFlow store
-  const currentEdges = getEdges.value
-
-  // BFS Queue: { nodeId, level, code }
-  const queue = [{ id: goalNode.id, level: 0, code: 'GOAL' }]
-  const visited = new Set([goalNode.id])
-
-  // Update GOAL
-  goalNode.data = { ...goalNode.data, level: 0, code: 'GOAL' }
-
-  while (queue.length > 0) {
-    const current = queue.shift()!
-
-    // Find children connected to this node (Inputs flow INTO the node)
-    // So we look for edges where TARGET is current.id
-    // The SOURCE of those edges are the children (inputs)
-    const childrenEdges = currentEdges.filter(e => e.target === current.id)
-
-    // Sort children to ensure consistent ordering (e.g. by Y position or ID)
-    const childrenNodes = childrenEdges
-      .map(e => findNode(e.source))
-      .filter(n => n !== undefined)
-      .sort((a, b) => a!.position.y - b!.position.y)
-
-    childrenNodes.forEach((child, index) => {
-      if (!child || visited.has(child.id)) return
-      visited.add(child.id)
-
-      const level = current.level + 1
-      let code = ''
-
-      if (current.id === 'goal') {
-        // Level 1: A, B, C...
-        code = String.fromCharCode(64 + (index + 1))
-      } else {
-        // Level 2+: ParentCode.Index
-        code = `${current.code}.${index + 1}`
-      }
-
-      // Update child data
-      // We update label to match code if it's the default "New Input" or just to enforce the style
-      const newLabel = child.data.label === 'New Input' ? code : child.data.label
-
-      child.data = { ...child.data, level, code, label: newLabel }
-
-      queue.push({ id: child.id, level, code })
-    })
-  }
-
-  // Calculate weights after tree structure is updated
-  recalculateWeights()
-}
-
-onConnect((params) => {
-  const sourceNode = findNode(params.source)
-  const targetNode = findNode(params.target)
-
-  if (!sourceNode || !targetNode) return
-
-  // Inherit color from source if it's not the central node
-  const edgeColor = sourceNode.data.color || '#64748b'
-
-  // Also inherit color if it's a new node (optional, but good for consistency)
-  if (targetNode.data.type !== 'central' && !targetNode.data.color) {
-    targetNode.data = { ...targetNode.data, color: edgeColor }
-  }
-
-  addEdges([
+  // Update STORE state directly
+  edges.value = [
+    ...edges.value,
     {
       ...params,
+      id: `e-${params.source}-${params.target}`,
       type: 'custom',
       data: { sign: '+', color: edgeColor },
       markerEnd: MarkerType.ArrowClosed,
-    },
-  ])
-
-  // Recalculate the entire tree structure
-  setTimeout(recalculateTree, 100)
-})
-
-const addNode = (type: 'central' | 'input') => {
-  if (type === 'central') {
-    // Check if central exists
-    if (nodes.value.find(n => n.data.type === 'central')) return
-
-    addNodes([{
-      id: 'goal',
-      type: 'custom',
-      position: { x: 400, y: 300 },
-      data: { label: 'GOAL', type: 'central', shape: 'round', code: 'GOAL', level: 0, color: '#000000', weight: 0, totalWeight: 0 },
-    }])
-    return
-  }
-
-  const id = Math.random().toString(36).substr(2, 9)
-
-  // Inherit color from the last added input node, or default to gray
-  let color = '#64748b'
-  const inputNodes = nodes.value.filter(n => n.data.type === 'input')
-  if (inputNodes.length > 0) {
-    const lastNode = inputNodes[inputNodes.length - 1]
-    if (lastNode.data.color) {
-      color = lastNode.data.color
     }
-  }
-
-  addNodes([{
-    id,
-    type: 'custom',
-    position: { x: Math.random() * 600, y: Math.random() * 400 },
-    data: {
-      label: 'New Input',
-      type: 'input',
-      shape: 'square',
-      color,
-      level: 1, // Default level until connected
-      weight: 0,
-      totalWeight: 0
-    },
-  }])
+  ]
+  
+  setTimeout(recalculateTree, 100)
 }
 
 const onNodeClick = (event: any) => {
-  // Check if Ctrl key is pressed (Delete Mode)
   if (isDeleteMode.value) {
-    // Prevent deletion of the central GOAL node
-    if (event.node.data.type === 'central') {
-      return
-    }
-
-    // Remove the node
+    if (event.node.data.type === 'central') return
     removeNodes([event.node.id])
-
-    // If the deleted node was selected, close the sidebar
+    
     if (selectedNode.value && selectedNode.value.id === event.node.id) {
       selectedNode.value = null
       sidebarOpen.value = false
@@ -382,14 +190,14 @@ const onEdgeClick = (event: any) => {
       <button @click="sidebarOpen = !sidebarOpen" class="btn-secondary">
         {{ sidebarOpen ? 'Hide List' : 'Show List' }}
       </button>
-      <button @click="addNode('central')" class="btn-primary">Add Goal</button>
-      <button @click="addNode('input')" class="btn-secondary">Add Input</button>
+      <button @click="storeAddNode('central')" class="btn-primary">Add Goal</button>
+      <button @click="storeAddNode('input')" class="btn-secondary">Add Input</button>
       <div v-if="isDeleteMode" class="mode-indicator">DELETE MODE</div>
     </div>
 
     <div class="main-area">
       <VueFlow v-model:nodes="nodes" v-model:edges="edges" :default-viewport="{ zoom: 1 }" :min-zoom="0.2" :max-zoom="4"
-        fit-view-on-init @node-click="onNodeClick" @edge-click="onEdgeClick">
+        fit-view-on-init @node-click="onNodeClick" @edge-click="onEdgeClick" @connect="onConnect">
         <template #node-custom="props">
           <CustomNode :data="props.data" />
         </template>
@@ -400,7 +208,6 @@ const onEdgeClick = (event: any) => {
 
         <Background pattern-color="#3b82f6" :gap="20" />
         <Controls />
-        <MiniMap />
       </VueFlow>
     </div>
 
