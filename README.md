@@ -2,6 +2,8 @@
 
 A visual tool for modeling and analyzing systemic relationships, designed to evaluate how different inputs and factors influence a central goal.
 
+**🚀 Live Demo:** [https://foxlab-mapsystem.netlify.app/](https://foxlab-mapsystem.netlify.app/) (Demo Mode)
+
 ## 🎯 Purpose
 
 This tool allows you to build a **System Map** where multiple input nodes flow into a central "Goal". By assigning weights and defining positive (`+`) or negative (`-`) influences, you can simulate "what-if" scenarios and understand the net impact of various factors on your main objective.
